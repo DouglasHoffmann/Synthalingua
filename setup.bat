@@ -5,6 +5,14 @@ Title Realtime Whisper Translation App Setup
 :prechecks
 if NOT exist synthalingua.py goto EoF_Error
 
+rem Check for ffmpeg
+ffmpeg -version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [WARNING] FFmpeg not found in PATH.
+    echo Please ensure FFmpeg is installed and accessible.
+    echo The setup will continue, but some features might not work until FFmpeg is configured.
+)
+
 :prepare_environment
 cls
 echo ============================================================
@@ -150,10 +158,7 @@ echo Activating the environment...
 call "!venv_activate!"
 
 echo Upgrading basic installation tools...
-python.exe -m pip install --upgrade pip setuptools wheel
-
-echo Installing additional build tools...
-pip install setuptools-rust
+python.exe -m pip install --upgrade pip setuptools wheel setuptools-rust
 
 echo Checking for 'requirements.txt'...
 if not exist "requirements.txt" (
@@ -162,41 +167,59 @@ if not exist "requirements.txt" (
 )
 
 echo Installing requirements from 'requirements.txt' (preferring binaries)...
+rem Attempting to install requirements. If it fails, we try a more robust approach for whisper.
 pip install --prefer-binary -r requirements.txt
+if %errorlevel% neq 0 (
+    echo.
+    echo [WORKAROUND] Standard install failed. Attempting robust install for openai-whisper...
+    pip install openai-whisper==20240930 --prefer-binary --no-build-isolation
+    pip install --prefer-binary -r requirements.txt
+)
 
 :gpu_selection
-echo.
+echo:
 echo Select your GPU type for PyTorch installation:
 echo   1) Nvidia (CUDA)
 echo   2) AMD (ROCm/OpenVINO)
 echo   3) CPU only
-set /p gpu_choice="Enter 1 for Nvidia, 2 for AMD, or 3 for CPU: "
+set "gpu_choice="
+set /p gpu_choice="Enter 1, 2 or 3: "
 
-if "!gpu_choice!"=="1" (
-    echo Applying CUDA patch to install GPU versions of PyTorch packages...
+if "!gpu_choice!"=="1" goto :gpu_nvidia
+if "!gpu_choice!"=="2" goto :gpu_amd
+if "!gpu_choice!"=="3" goto :gpu_cpu
+goto :gpu_selection
+
+:gpu_nvidia
+echo Applying CUDA patch to install GPU versions of PyTorch packages...
+pip uninstall --yes torch torchaudio
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu129
+echo CUDA patch applied for Nvidia GPU support.
+goto :vocal_isolation_check
+
+:gpu_amd
+echo:
+echo AMD ROCm for Windows is officially supported for RDNA3 GPUs like the RX 7000 series.
+echo If you already have a working ROCm environment, choose N to keep it.
+echo:
+echo Note - OpenVINO is generally more stable and faster for AMD GPUs on Windows.
+set "use_rocm="
+set /p use_rocm="Do you want to attempt installing ROCm PyTorch? [Y/N]: "
+if /i "!use_rocm!"=="Y" (
+    echo Applying ROCm patch...
     pip uninstall --yes torch torchaudio
-    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu129
-    echo CUDA patch applied for Nvidia GPU support.
-) else if "!gpu_choice!"=="2" (
-    echo.
-    echo AMD ROCm for Windows is officially supported for RDNA3 GPUs (RX 7000 series).
-    echo If you already have a working ROCm environment (torch.cuda.is_available() = True),
-    echo you should choose 'N' here to keep your current installation.
-    echo.
-    echo Note: OpenVINO is generally more stable and faster for AMD GPUs on Windows.
-    set /p use_rocm="Do you want to attempt installing ROCm-enabled PyTorch? [Y/N]: "
-    if /i "!use_rocm!"=="Y" (
-        echo Applying ROCm patch to install AMD GPU versions of PyTorch packages...
-        pip uninstall --yes torch torchaudio
-        rem Using the official PyTorch ROCm index (currently primarily Linux, but included for completeness)
-        pip install torch torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
-        echo ROCm patch applied for AMD GPU support.
-    ) else (
-        echo Skipping ROCm patch. You can still use your AMD GPU with '--model_source openvino' and '--device amd-gpu'.
-    )
+    pip install torch torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
+    echo ROCm patch applied.
 ) else (
-    echo No GPU acceleration selected. Using default CPU versions of torch and torchaudio.
+    echo Skipping ROCm patch. OpenVINO mode is recommended.
 )
+goto :vocal_isolation_check
+
+:gpu_cpu
+echo No GPU acceleration selected. Using default CPU versions of torch and torchaudio.
+goto :vocal_isolation_check
+
+:vocal_isolation_check
 
 rem === Ask about vocal isolation (demucs) ===
 set /p install_demucs="Do you plan to use the vocal isolation feature (requires demucs, ~1GB download)? [Y/N]: "
