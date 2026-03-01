@@ -33,6 +33,34 @@ goto :prepare_environment
 
 :prepare_environment
 cls
+echo ------------------------------------------------------------
+echo Virtual Environment Setup
+echo ------------------------------------------------------------
+echo You can use the default environment (data_whisper) or provide
+echo a path to an existing one (e.g., C:\path\to\venv).
+echo.
+set /p custom_venv="Do you want to use an existing virtual environment? (Enter root path or press Enter for default): "
+
+if not "!custom_venv!"=="" (
+    set "venv_root=!custom_venv!"
+    if "!venv_root:~-1!"=="\" set "venv_root=!venv_root:~0,-1!"
+
+    if exist "!venv_root!\Scripts\activate.bat" (
+        set "venv_activate=!venv_root!\Scripts\activate.bat"
+        echo Using existing environment at !venv_root!
+        goto :install_dependencies
+    ) else if exist "!venv_root!\activate.bat" (
+        set "venv_activate=!venv_root!\activate.bat"
+        echo Using existing environment at !venv_root!
+        goto :install_dependencies
+    ) else (
+        echo Error: Could not find activate.bat in !venv_root!\Scripts or !venv_root!
+        pause
+        goto :prepare_environment
+    )
+)
+
+set "venv_activate=data_whisper\Scripts\activate.bat"
 set "reuse_env="
 if exist "data_whisper" (
     set /p reuse_env="Python environment 'data_whisper' already exists. Reuse it? [Y/N]: "
@@ -57,7 +85,7 @@ echo Creating a new Python virtual environment...
 
 :install_dependencies
 echo Activating the environment...
-call data_whisper\Scripts\activate.bat
+call "!venv_activate!"
 
 echo Upgrading pip to the latest version...
 python.exe -m pip install --upgrade pip
@@ -75,20 +103,38 @@ if not exist "requirements.txt" (
 echo Installing requirements from 'requirements.txt'...
 pip install -r requirements.txt
 
-:cuda_patch
-set /p has_cuda_gpu="Do you have an Nvidia GPU with CUDA cores? [Y/N]: "
-if /i "!has_cuda_gpu!"=="Y" (
-    set /p use_cuda="Do you want to use your Nvidia GPU for acceleration? [Y/N]: "
-    if /i "!use_cuda!"=="Y" (
-        echo Applying CUDA patch to install GPU versions of PyTorch packages...
-        pip uninstall --yes torch 
-        pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu129
-        echo CUDA patch applied for Nvidia GPU support.
+:gpu_selection
+echo.
+echo Select your GPU type for PyTorch installation:
+echo   1) Nvidia (CUDA)
+echo   2) AMD (ROCm - Windows support is emerging)
+echo   3) CPU only
+set /p gpu_choice="Enter 1 for Nvidia, 2 for AMD, or 3 for CPU: "
+
+if "!gpu_choice!"=="1" (
+    echo Applying CUDA patch to install GPU versions of PyTorch packages...
+    pip uninstall --yes torch torchaudio
+    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu129
+    echo CUDA patch applied for Nvidia GPU support.
+) else if "!gpu_choice!"=="2" (
+    echo.
+    echo AMD ROCm for Windows is officially supported for RDNA3 GPUs (RX 7000 series).
+    echo If you already have a working ROCm environment (torch.cuda.is_available() = True),
+    echo you should choose 'N' here to keep your current installation.
+    echo.
+    echo Note: OpenVINO is generally more stable and faster for AMD GPUs on Windows.
+    set /p use_rocm="Do you want to attempt installing ROCm-enabled PyTorch? [Y/N]: "
+    if /i "!use_rocm!"=="Y" (
+        echo Applying ROCm patch to install AMD GPU versions of PyTorch packages...
+        pip uninstall --yes torch torchaudio
+        rem Using the official PyTorch ROCm index (currently primarily Linux, but included for completeness)
+        pip install torch torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
+        echo ROCm patch applied for AMD GPU support.
     ) else (
-        echo Skipping CUDA patch. Using default CPU versions of torch, torchvision, and torchaudio.
+        echo Skipping ROCm patch. You can still use your AMD GPU with '--model_source openvino' and '--device amd-gpu'.
     )
 ) else (
-    echo Not using Nvidia GPU. Keeping default CPU versions of torch, torchvision, and torchaudio.
+    echo No GPU acceleration selected. Using default CPU versions of torch and torchaudio.
 )
 
 rem === Ask about vocal isolation (demucs) ===
@@ -109,10 +155,16 @@ echo Creating a shortcut batch file for the translation app...
 (
     echo @echo off
     echo cls
-    echo call "data_whisper\Scripts\activate.bat"
+    echo call "!venv_activate!"
     echo call ffmpeg_path.bat
             echo rem Example: Generate English captions for a video file
-            echo python "synthalingua.py" --ram 3gb --makecaptions --file_input "C:\path\to\your\video.mp4" --file_output "C:\path\to\output\folder" --file_output_name "output_captions" --language Japanese --device cuda
+            if "!gpu_choice!"=="2" (
+                echo python "synthalingua.py" --ram 3gb --makecaptions --model_source openvino --device amd-gpu --file_input "C:\path\to\your\video.mp4" --file_output "C:\path\to\output\folder" --file_output_name "output_captions" --language Japanese
+            ) else if "!gpu_choice!"=="3" (
+                echo python "synthalingua.py" --ram 3gb --makecaptions --device cpu --file_input "C:\path\to\your\video.mp4" --file_output "C:\path\to\output\folder" --file_output_name "output_captions" --language Japanese
+            ) else (
+                echo python "synthalingua.py" --ram 3gb --makecaptions --device cuda --file_input "C:\path\to\your\video.mp4" --file_output "C:\path\to\output\folder" --file_output_name "output_captions" --language Japanese
+            )
             echo rem Edit the above paths and options as needed
     echo pause
 ) > "livetranslation.bat"
@@ -123,7 +175,7 @@ pause
 
 :setup_env
 Echo Setting up Environment Stuff.
-call data_whisper\Scripts\activate.bat
+call "!venv_activate!"
 python set_up_env.py --reinstall
 
 exit /b
