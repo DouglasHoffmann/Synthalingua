@@ -239,6 +239,19 @@ def setup_device(args):
         elif device == "intel-npu":
             if "NPU" in devices:
                 return "NPU"
+        elif device == "amd-gpu":
+            # For AMD GPUs, OpenVINO typically identifies them as GPU or GPU.x
+            for _device in devices:
+                if _device.startswith("GPU"):
+                    try:
+                        full_name = core.get_property(_device, "FULL_DEVICE_NAME").lower()
+                        if "amd" in full_name or "radeon" in full_name:
+                            return _device
+                    except Exception:
+                        continue
+            # Fallback to first GPU if AMD not found by name but requested
+            if "GPU" in devices:
+                return "GPU"
         elif device != "auto":
             raise ValueError(f"\"{args.device}\" is not an valid device for OpenVINO. Please pick another --device.")
 
@@ -288,7 +301,10 @@ def setup_device(args):
         print(f"VRAM available: {torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory / 1024 / 1024} MB")
 
         if "AMD" in torch.cuda.get_device_name(torch.cuda.current_device()):
-            print("WARNING: You are using an AMD GPU with CUDA. This may not work properly. Consider using CPU instead.")
+            if sys.platform.startswith('win'):
+                print(f"{Fore.CYAN}Note:{Style.RESET_ALL} AMD GPU detected via ROCm/CUDA. Ensure you have the latest AMD Software: Adrenalin Edition with ROCm support installed.")
+            else:
+                print("WARNING: You are using an AMD GPU with ROCm. If you experience issues, consider using CPU or OpenVINO instead.")
 
         return "cuda"
     raise ValueError(f"\"{args.model_source}\" is not a valid model source")
