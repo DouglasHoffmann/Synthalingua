@@ -33,6 +33,34 @@ goto :prepare_environment
 
 :prepare_environment
 cls
+echo ------------------------------------------------------------
+echo Virtual Environment Setup
+echo ------------------------------------------------------------
+echo You can use the default environment (data_whisper) or provide
+echo a path to an existing one (e.g., C:\path\to\venv).
+echo.
+set /p custom_venv="Do you want to use an existing virtual environment? (Enter root path or press Enter for default): "
+
+if not "!custom_venv!"=="" (
+    set "venv_root=!custom_venv!"
+    if "!venv_root:~-1!"=="\" set "venv_root=!venv_root:~0,-1!"
+
+    if exist "!venv_root!\Scripts\activate.bat" (
+        set "venv_activate=!venv_root!\Scripts\activate.bat"
+        echo Using existing environment at !venv_root!
+        goto :install_dependencies
+    ) else if exist "!venv_root!\activate.bat" (
+        set "venv_activate=!venv_root!\activate.bat"
+        echo Using existing environment at !venv_root!
+        goto :install_dependencies
+    ) else (
+        echo Error: Could not find activate.bat in !venv_root!\Scripts or !venv_root!
+        pause
+        goto :prepare_environment
+    )
+)
+
+set "venv_activate=data_whisper\Scripts\activate.bat"
 set "reuse_env="
 if exist "data_whisper" (
     set /p reuse_env="Python environment 'data_whisper' already exists. Reuse it? [Y/N]: "
@@ -57,7 +85,7 @@ echo Creating a new Python virtual environment...
 
 :install_dependencies
 echo Activating the environment...
-call data_whisper\Scripts\activate.bat
+call "!venv_activate!"
 
 echo Upgrading pip to the latest version...
 python.exe -m pip install --upgrade pip
@@ -127,7 +155,7 @@ echo Creating a shortcut batch file for the translation app...
 (
     echo @echo off
     echo cls
-    echo call "data_whisper\Scripts\activate.bat"
+    echo call "!venv_activate!"
     echo call ffmpeg_path.bat
             echo rem Example: Generate English captions for a video file
             if "!gpu_choice!"=="2" (
@@ -147,7 +175,7 @@ pause
 
 :setup_env
 Echo Setting up Environment Stuff.
-call data_whisper\Scripts\activate.bat
+call "!venv_activate!"
 python set_up_env.py --reinstall
 
 exit /b
