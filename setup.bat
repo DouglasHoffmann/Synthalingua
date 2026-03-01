@@ -7,16 +7,33 @@ if NOT exist synthalingua.py goto EoF_Error
 
 :prepare_environment
 cls
-echo ------------------------------------------------------------
-echo Virtual Environment Setup
-echo ------------------------------------------------------------
-echo You can use the default environment (data_whisper) or provide
-echo a path to an existing one (e.g., C:\path\to\venv).
+echo ============================================================
+echo  Synthalingua Setup - Environment Configuration
+echo ============================================================
 echo.
-set /p custom_venv="Do you want to use an existing virtual environment? (Enter root path or press Enter for default): "
+echo Select an option:
+echo   1) Use an existing Virtual Environment (Recommended for your ROCm setup)
+echo   2) Create a new Virtual Environment (data_whisper)
+echo   3) Exit
+echo.
+set "start_choice="
+set /p start_choice="Enter choice (1-3): "
 
-if not "!custom_venv!"=="" (
-    set "user_path=!custom_venv!"
+if "!start_choice!"=="1" goto :custom_venv_setup
+if "!start_choice!"=="2" goto :python_check
+if "!start_choice!"=="3" exit /b
+goto :prepare_environment
+
+:custom_venv_setup
+echo.
+echo Please enter the root path of your virtual environment
+echo (e.g., C:\Users\douglas\Documents\GitHub\venvpy12\venv)
+echo or the full path to the activate.bat file.
+echo.
+set "user_path="
+set /p user_path="Path: "
+
+if not "!user_path!"=="" (
     rem Remove quotes if present
     set "user_path=!user_path:"=!"
     rem Remove trailing backslash if present
@@ -40,7 +57,7 @@ if not "!custom_venv!"=="" (
     rem Check for activate.bat in Scripts subdirectory (common for venv on Windows)
     if exist "!user_path!\Scripts\activate.bat" (
         set "venv_activate=!user_path!\Scripts\activate.bat"
-        echo Using environment at !user_path!
+        echo [SUCCESS] Found environment at !user_path!
         goto :install_dependencies
     )
 
@@ -60,18 +77,17 @@ if not "!custom_venv!"=="" (
     rem Check for activate.bat in the path itself
     if exist "!user_path!\activate.bat" (
         set "venv_activate=!user_path!\activate.bat"
-        echo Using environment at !user_path!
+        echo [SUCCESS] Found environment at !user_path!
         goto :install_dependencies
     )
 
     echo.
     echo [ERROR] Could not find activate.bat at or within: !user_path!
-    echo Please ensure you provide the root path of your virtual environment
-    echo (the folder containing 'Scripts') or the full path to 'activate.bat'.
     echo.
     pause
     goto :prepare_environment
 )
+goto :prepare_environment
 
 :python_check
 cls

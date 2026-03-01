@@ -1,6 +1,37 @@
 import sys
 import warnings
 
+# =================================================================
+# ROCm/Windows Workaround Block
+# This handles a specific ModuleNotFoundError in torch.distributed
+# when using ROCm-enabled PyTorch on Windows.
+# =================================================================
+if sys.platform.startswith('win'):
+    try:
+        import torch
+        # Check if torch._C._distributed_c10d is missing, which is common in Windows ROCm builds
+        # and causes transformers/optimum-intel to crash on import.
+        from types import ModuleType
+        try:
+            # Try to import a module that we know requires _distributed_c10d
+            import torch.distributed.distributed_c10d
+        except (ImportError, ModuleNotFoundError):
+            # Create mocks for the distributed infrastructure if it's broken
+            mock_dist = ModuleType("torch.distributed")
+            mock_dist.is_available = lambda: False
+
+            # Populate sys.modules with mocks to prevent import errors
+            sys.modules["torch.distributed"] = mock_dist
+            sys.modules["torch.distributed.tensor"] = ModuleType("torch.distributed.tensor")
+            sys.modules["torch.distributed.tensor._ops"] = ModuleType("torch.distributed.tensor._ops")
+            sys.modules["torch.distributed.distributed_c10d"] = ModuleType("torch.distributed.distributed_c10d")
+            sys.modules["torch._C._distributed_c10d"] = ModuleType("torch._C._distributed_c10d")
+
+    except Exception:
+        # If anything fails here, we let the normal import flow proceed and fail naturally
+        pass
+# =================================================================
+
 # Suppress the pkg_resources deprecation warning from ctranslate2
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API.*", category=UserWarning)
 
