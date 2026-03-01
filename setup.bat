@@ -3,9 +3,78 @@ setlocal enabledelayedexpansion
 Title Realtime Whisper Translation App Setup
 
 :prechecks
-
 if NOT exist synthalingua.py goto EoF_Error
 
+:prepare_environment
+cls
+echo ------------------------------------------------------------
+echo Virtual Environment Setup
+echo ------------------------------------------------------------
+echo You can use the default environment (data_whisper) or provide
+echo a path to an existing one (e.g., C:\path\to\venv).
+echo.
+set /p custom_venv="Do you want to use an existing virtual environment? (Enter root path or press Enter for default): "
+
+if not "!custom_venv!"=="" (
+    set "user_path=!custom_venv!"
+    rem Remove quotes if present
+    set "user_path=!user_path:"=!"
+    rem Remove trailing backslash if present
+    if "!user_path:~-1!"=="\" set "user_path=!user_path:~0,-1!"
+
+    rem Check if the path is directly to activate.bat or just 'activate'
+    set "is_activate=0"
+    if /i "!user_path:~-12!"=="activate.bat" set "is_activate=1"
+    if /i "!user_path:~-8!"=="activate" set "is_activate=1"
+
+    if "!is_activate!"=="1" (
+        set "temp_path=!user_path!"
+        if /i "!temp_path:~-4!" neq ".bat" set "temp_path=!temp_path!.bat"
+        if exist "!temp_path!" (
+            set "venv_activate=!temp_path!"
+            echo [SUCCESS] Found activation script: !venv_activate!
+            goto :install_dependencies
+        )
+    )
+
+    rem Check for activate.bat in Scripts subdirectory (common for venv on Windows)
+    if exist "!user_path!\Scripts\activate.bat" (
+        set "venv_activate=!user_path!\Scripts\activate.bat"
+        echo Using environment at !user_path!
+        goto :install_dependencies
+    )
+
+    rem Check if the path provided IS the Scripts folder
+    set "is_scripts=0"
+    if /i "!user_path:~-7!"=="Scripts" set "is_scripts=1"
+    if /i "!user_path:~-8!"=="Scripts\" set "is_scripts=1"
+
+    if "!is_scripts!"=="1" (
+        if exist "!user_path!\activate.bat" (
+            set "venv_activate=!user_path!\activate.bat"
+            echo [SUCCESS] Found activation script in Scripts folder: !venv_activate!
+            goto :install_dependencies
+        )
+    )
+
+    rem Check for activate.bat in the path itself
+    if exist "!user_path!\activate.bat" (
+        set "venv_activate=!user_path!\activate.bat"
+        echo Using environment at !user_path!
+        goto :install_dependencies
+    )
+
+    echo.
+    echo [ERROR] Could not find activate.bat at or within: !user_path!
+    echo Please ensure you provide the root path of your virtual environment
+    echo (the folder containing 'Scripts') or the full path to 'activate.bat'.
+    echo.
+    pause
+    goto :prepare_environment
+)
+
+:python_check
+cls
 Echo Checking for Python 3.12.x
 echo Running command: python -V
 python -V
@@ -26,39 +95,7 @@ if /i "%user_check%" neq "Y" (
     rem Set default python if user confirms Python 3.12.x is installed
     set "python=python"
 )
-
 pause
-
-goto :prepare_environment
-
-:prepare_environment
-cls
-echo ------------------------------------------------------------
-echo Virtual Environment Setup
-echo ------------------------------------------------------------
-echo You can use the default environment (data_whisper) or provide
-echo a path to an existing one (e.g., C:\path\to\venv).
-echo.
-set /p custom_venv="Do you want to use an existing virtual environment? (Enter root path or press Enter for default): "
-
-if not "!custom_venv!"=="" (
-    set "venv_root=!custom_venv!"
-    if "!venv_root:~-1!"=="\" set "venv_root=!venv_root:~0,-1!"
-
-    if exist "!venv_root!\Scripts\activate.bat" (
-        set "venv_activate=!venv_root!\Scripts\activate.bat"
-        echo Using existing environment at !venv_root!
-        goto :install_dependencies
-    ) else if exist "!venv_root!\activate.bat" (
-        set "venv_activate=!venv_root!\activate.bat"
-        echo Using existing environment at !venv_root!
-        goto :install_dependencies
-    ) else (
-        echo Error: Could not find activate.bat in !venv_root!\Scripts or !venv_root!
-        pause
-        goto :prepare_environment
-    )
-)
 
 set "venv_activate=data_whisper\Scripts\activate.bat"
 set "reuse_env="
@@ -77,6 +114,15 @@ if exist "data_whisper" (
             pause
             exit /b
         )
+    )
+) else (
+    echo.
+    echo No custom environment was selected, and the default 'data_whisper' does not exist.
+    set /p create_new="Create a new virtual environment 'data_whisper' now? [Y/N]: "
+    if /i "!create_new!" neq "Y" (
+        echo Operation cancelled by user.
+        pause
+        exit /b
     )
 )
 
