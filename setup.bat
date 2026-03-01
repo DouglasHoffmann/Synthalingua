@@ -12,8 +12,8 @@ echo  Synthalingua Setup - Environment Configuration
 echo ============================================================
 echo.
 echo Select an option:
-echo   1) Use an existing Virtual Environment (Recommended for your ROCm setup)
-echo   2) Create a new Virtual Environment (data_whisper)
+echo   1) Use an existing Virtual Environment (Recommended if you already have ROCm/Torch)
+echo   2) Create a new Virtual Environment (data_whisper - clean installation)
 echo   3) Exit
 echo.
 set "start_choice="
@@ -149,11 +149,10 @@ echo Creating a new Python virtual environment...
 echo Activating the environment...
 call "!venv_activate!"
 
-echo Upgrading pip to the latest version...
-python.exe -m pip install --upgrade pip
+echo Upgrading basic installation tools...
+python.exe -m pip install --upgrade pip setuptools wheel
 
-echo Installing wheel and setuptools-rust...
-pip install wheel
+echo Installing additional build tools...
 pip install setuptools-rust
 
 echo Checking for 'requirements.txt'...
@@ -162,14 +161,14 @@ if not exist "requirements.txt" (
     exit /b
 )
 
-echo Installing requirements from 'requirements.txt'...
-pip install -r requirements.txt
+echo Installing requirements from 'requirements.txt' (preferring binaries)...
+pip install --prefer-binary -r requirements.txt
 
 :gpu_selection
 echo.
 echo Select your GPU type for PyTorch installation:
 echo   1) Nvidia (CUDA)
-echo   2) AMD (ROCm - Windows support is emerging)
+echo   2) AMD (ROCm/OpenVINO)
 echo   3) CPU only
 set /p gpu_choice="Enter 1 for Nvidia, 2 for AMD, or 3 for CPU: "
 
